@@ -18,7 +18,7 @@ router.post(
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { roomCode, userId, rankings } = req.body;
+    const { roomCode, userId, rankings, voterName } = req.body;
 
     // Fetch room — maybeSingle returns null data (not an error) when no row found
     const { data: room, error: roomError } = await supabase
@@ -80,6 +80,7 @@ router.post(
         roomid: room.id,
         userid: userId,
         rankings,
+        ...(voterName ? { votername: voterName } : {}),
       })
       .select()
       .single();

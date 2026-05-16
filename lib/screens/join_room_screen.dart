@@ -17,16 +17,20 @@ class JoinRoomScreen extends StatefulWidget {
 
 class _JoinRoomScreenState extends State<JoinRoomScreen> {
   final _codeController = TextEditingController();
+  final _nameController = TextEditingController();
   bool _isLoading = false;
 
   @override
   void dispose() {
     _codeController.dispose();
+    _nameController.dispose();
     super.dispose();
   }
 
   Future<void> _joinRoom() async {
     final code = _codeController.text.trim().toUpperCase();
+    final name = _nameController.text.trim();
+
     if (code.length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Room code must be 6 characters')),
@@ -34,16 +38,26 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
       return;
     }
 
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your name')),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
-      final user = await AuthService().getOrCreateUser();
+      // Generate a stable ID from name + room code so the same person
+      // rejoining gets the same ID, but different names get different IDs.
+      // This lets multiple voters share the same device.
+      final voterId = AuthService().voterIdForRoom(name: name, roomCode: code);
+
       final data = await ApiService().getRoom(code);
 
       if (!mounted) return;
 
-      // Check if already voted
-      final hasVoted = await ApiService().checkHasVoted(code, user.id);
+      final hasVoted = await ApiService().checkHasVoted(code, voterId);
 
       if (!mounted) return;
 
@@ -53,8 +67,10 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
           builder: (_) => VotingRoomScreen(
             room: data.room,
             options: data.options,
-            isCreator: data.room.createdBy == user.id,
+            isCreator: false,
             alreadyVoted: hasVoted,
+            voterId: voterId,
+            voterName: name,
           ),
         ),
       );
@@ -78,7 +94,6 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Back button
                 IconButton(
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.arrow_back_rounded),
@@ -92,14 +107,15 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
 
                 const SizedBox(height: 32),
 
-                // Illustration / Icon
                 Container(
                   width: 72,
                   height: 72,
                   decoration: BoxDecoration(
+                    // ignore: deprecated_member_use
                     color: AppTheme.emerald500.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
+                        // ignore: deprecated_member_use
                         color: AppTheme.emerald400.withOpacity(0.4), width: 1.5),
                   ),
                   child: const Icon(Icons.login_rounded,
@@ -111,21 +127,51 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
                 Text(
                   'Join a Room',
                   style: Theme.of(context).textTheme.displayMedium,
-                ).animate().fadeIn(delay: 150.ms).slideX(begin: -0.05),
+                ).animate().fadeIn(delay: 150.ms),
 
                 const SizedBox(height: 8),
 
                 Text(
-                  'Enter the 6-character code shared by the room creator.',
+                  'Enter your name and the room code to cast your vote.',
                   style: Theme.of(context)
                       .textTheme
                       .bodyLarge
                       ?.copyWith(color: AppTheme.slate500),
                 ).animate().fadeIn(delay: 200.ms),
 
-                const SizedBox(height: 40),
+                const SizedBox(height: 32),
 
-                // Code input
+                // Name field
+                Text(
+                  'Your Name',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppTheme.slate300,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ).animate().fadeIn(delay: 250.ms),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    hintText: 'e.g. Alice',
+                    prefixIcon:
+                        Icon(Icons.person_rounded, color: AppTheme.slate500),
+                  ),
+                  style: const TextStyle(color: Colors.white),
+                  textCapitalization: TextCapitalization.words,
+                ).animate().fadeIn(delay: 280.ms).slideY(begin: 0.1),
+
+                const SizedBox(height: 20),
+
+                // Room code field
+                Text(
+                  'Room Code',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppTheme.slate300,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ).animate().fadeIn(delay: 300.ms),
+                const SizedBox(height: 8),
                 TextField(
                   controller: _codeController,
                   textCapitalization: TextCapitalization.characters,
@@ -151,16 +197,16 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
                         horizontal: 20, vertical: 20),
                   ),
                   onChanged: (v) {
-                    // Auto-uppercase
                     final upper = v.toUpperCase();
                     if (v != upper) {
                       _codeController.value = TextEditingValue(
                         text: upper,
-                        selection: TextSelection.collapsed(offset: upper.length),
+                        selection:
+                            TextSelection.collapsed(offset: upper.length),
                       );
                     }
                   },
-                ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.1),
+                ).animate().fadeIn(delay: 330.ms).slideY(begin: 0.1),
 
                 const SizedBox(height: 24),
 
@@ -180,10 +226,9 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
 
                 const Spacer(),
 
-                // Hint
                 Center(
                   child: Text(
-                    'Ask the room creator to share their room code',
+                    'Your name identifies you within this room',
                     style: Theme.of(context)
                         .textTheme
                         .bodyMedium

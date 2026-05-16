@@ -15,6 +15,8 @@ class VotingRoomScreen extends StatefulWidget {
   final List<VotingOption> options;
   final bool isCreator;
   final bool alreadyVoted;
+  final String? voterId;    // name-based ID for joiners
+  final String? voterName;  // display name
 
   const VotingRoomScreen({
     super.key,
@@ -22,6 +24,8 @@ class VotingRoomScreen extends StatefulWidget {
     required this.options,
     this.isCreator = false,
     this.alreadyVoted = false,
+    this.voterId,
+    this.voterName,
   });
 
   @override
@@ -35,6 +39,12 @@ class _VotingRoomScreenState extends State<VotingRoomScreen> {
   bool _isSubmitting = false;
   bool _isClosing = false;
 
+  /// Returns the correct ID to use for this voter:
+  /// - Joiners use the name-based hash ID passed from JoinRoomScreen
+  /// - Creator uses their Supabase anonymous auth ID
+  String? get _effectiveUserId =>
+      widget.voterId ?? AuthService().currentUserId;
+
   @override
   void initState() {
     super.initState();
@@ -46,7 +56,7 @@ class _VotingRoomScreenState extends State<VotingRoomScreen> {
   Future<void> _submitVote() async {
     setState(() => _isSubmitting = true);
     try {
-      final userId = AuthService().currentUserId;
+      final userId = _effectiveUserId;
       if (userId == null) throw Exception('Not authenticated');
 
       final rankings = _rankedOptions.map((o) => o.id).toList();
@@ -54,6 +64,7 @@ class _VotingRoomScreenState extends State<VotingRoomScreen> {
         roomCode: _room.code,
         userId: userId,
         rankings: rankings,
+        voterName: widget.voterName,
       );
 
       if (!mounted) return;
@@ -116,7 +127,7 @@ class _VotingRoomScreenState extends State<VotingRoomScreen> {
 
     setState(() => _isClosing = true);
     try {
-      final userId = AuthService().currentUserId;
+      final userId = _effectiveUserId;
       if (userId == null) throw Exception('Not authenticated');
 
       final result = await ApiService().closeVotingAndGetResults(

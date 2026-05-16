@@ -104,6 +104,7 @@ class ApiService {
     required String roomCode,
     required String userId,
     required List<String> rankings,
+    String? voterName,
   }) async {
     final response = await http
         .post(
@@ -113,6 +114,7 @@ class ApiService {
             'roomCode': roomCode,
             'userId': userId,
             'rankings': rankings,
+            if (voterName != null) 'voterName': voterName,
           }),
         )
         .timeout(const Duration(seconds: 15));
